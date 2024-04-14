@@ -185,14 +185,100 @@ function get_first_monday {
     # get first weekday
 }
 
+
+function replace_ddate {
+    # edit dates in
+    tstr=""
+    for ii in ${@:3}; do
+        # get todo line
+        origstr=$( sed -n ${ii}p $srcfile )
+        repstr="$origstr"
+        # if has due date, change due date
+        if [[ $( has_dd "$origstr" ) -eq 1 ]]; then
+            # echo has due date, replace due date
+            # tstr="${tstr/due:[^ ]\+/due:$ddate}"
+            if [ -n "$remove_ddate" ]; then
+                repstr=$( echo $origstr | sed -E "s/([ ^]?due:)[^ ]*//g" )
+            else
+                repstr=$( echo $origstr | sed -E "s/([ ^]?due:)[^ ]*/\1$ddate/g" )
+                # TODO: try to find a pure bash alternative to this
+            fi
+        # otherwise, add due date at the end
+        # (its more simple now that creation dates or crossed status or priorities don't have to be
+        # checked
+        elif [ -z "$remove_ddate" ]; then
+            # or maybe add it on the front, who knows what's best. I like it on the front
+            repstr="$origstr due:$ddate"
+            # sed -i "${ln}s/$/<ddatestr>/" $srcfile
+        else
+            echo "no due date to remove"
+        fi
+
+        # (optional) Prompt user to accept changes
+        choice=""
+        if [ $TODOTXT_SETDUE_SAFECHECK == "1" ]; then
+            # Ask for choice
+            echo "$self: Do you wish to replace this line:"
+            echo -e "\t$origstr"
+            echo "with this line?"
+            echo -e "\t$repstr"
+            echo -n "Y/n: "
+            # Read choice
+            read choice;
+        fi
+        # Interpret choice
+        # If choice is not empty or "n" or "N", exit without applying changes
+        # Changed second instance of ${choice} from ${choice,,} to solve bug
+        # #2, awaiting confirmation of solution
+        if [ ! -z "${choice}" ] && [ "${choice}" == "n" ]; then
+            # Notify that changes were aborted
+            if [ $TODOTXT_SETDUE_SAFECHECK == "1" ] || [ $TODOTXT_SETDUE_VERBOSE == "1" ]; then
+                echo "$self: Changes aborted."
+            fi
+            # Skip modifying the file
+        # Otherwise, assume changes are to be applied, and apply them
+        else
+            # Replace original line with contents from tmpfile
+            # sed -in "${ln}s/$origstr/$repstr/g" $srcfile
+
+            # WARNING: the following two lines do virtually an in-place
+            # editting of the file. It is done without the -i flag of sed
+            # because it is not equivalently interpreted by BSD sed, which may
+            # be present in some computers
+            sed "${ii}c\\$repstr" $srcfile > "$srcfile.setdue"
+            mv "$srcfile.setdue" $srcfile
+
+            # Notify that changes were applied
+            if [ $TODOTXT_SETDUE_SAFECHECK == "1" ] || [ $TODOTXT_SETDUE_VERBOSE == "1" ]; then
+                echo "$self: Changes applied."
+            fi
+        fi
+    done
+}
+
 # EOB Functions 1}}}
 
 # Main block {{{1
 usagestr="usage: $TODO_SH $self DUEDATE ITEM#+
 parameter conditions:
  * DUEDATE must be in a supported date format
+   * absolute
+     * yyyy-mm-dd
+     * --mm--dd
+     * ---dd
+     * yyyy-Www
+     * --Www
+     * yyyy-Www-D
+     * --Www-D
+     * yyyy-ddd
+     * --ddd
+   * differential
+     * -ddd
+     * +ddd
+     * nw (this weekday in next week)
+     * xxx (first three letters in a weekday name) = next such weekday
+   * '-' to remove due date
  * ITEM# must be an integer"
- # TODO: add a list of the valid formats
 
 case $2 in
 "usage")
@@ -244,6 +330,7 @@ case $2 in
         # if b is defined, a weekday was given
         if [[ -n $b ]]; then
             a=$(date +%u) # current weekday ordinal (1:monday, 7:sunday)
+            # TODO this always uses next week's weekdays. Is this intended behavior?
             inputdate=$(echo +$((b-a))) # convert into differential duedate
         fi
     fi
@@ -323,7 +410,7 @@ case $2 in
         week=${BASH_REMATCH[1]}
         weekday=${BASH_REMATCH[2]}
         echo FMT__WWW_D
-    ## diferential dates
+    ## differential dates
     elif [[ $inputdate =~ $FMT_MDDD ]]; then
         (( diff= 0 - ${BASH_REMATCH[1]} ))
         [[ $( add_days $today $diff ) =~ $FMT_YYYY_MM_DD ]]
@@ -338,6 +425,11 @@ case $2 in
         month=${BASH_REMATCH[2]}
         date=${BASH_REMATCH[3]}
         # echo FMT_PDDD
+    ## remove due date
+    elif [[ $inputdate = "-" ]]; then
+        remove_ddate=1
+        replace_ddate "$@"
+        exit
 
     ## nominal dates
     ## catch malformed date parameter
@@ -374,67 +466,7 @@ case $2 in
     # printf "%d-%02d-%02d\n" $year $month $date
     ddate=$( printf "%04d-%02d-%02d" $year $month $date )
 
-    # edit dates in
-    tstr=""
-    for ii in ${@:3}; do
-        # get todo line
-        origstr=$( sed -n ${ii}p $srcfile )
-        repstr="$origstr"
-        # if has due date, change due date
-        if [[ $( has_dd "$origstr" ) -eq 1 ]]; then
-            # echo has due date, replace due date
-            # tstr="${tstr/due:[^ ]\+/due:$ddate}"
-            repstr=$( echo $origstr | sed -E "s/([ ^]?due:)[^ ]*/\1$ddate/g" )
-            # TODO: try to find a pure bash alternative to this
-        # otherwise, add due date at the end
-        # (its more simple now that creation dates or crossed status or priorities don't have to be
-        # checked
-        else
-            # or maybe add it on the front, who knows what's best. I like it on the front
-            repstr="$origstr due:$ddate"
-            # sed -i "${ln}s/$/<ddatestr>/" $srcfile
-        fi
-
-        # (optional) Prompt user to accept changes
-        choice=""
-        if [ $TODOTXT_SETDUE_SAFECHECK == "1" ]; then
-            # Ask for choice
-            echo "$self: Do you wish to replace this line:"
-            echo -e "\t$origstr"
-            echo "with this line?"
-            echo -e "\t$repstr"
-            echo -n "Y/n: "
-            # Read choice
-            read choice;
-        fi
-        # Interpret choice
-        # If choice is not empty or "n" or "N", exit without applying changes
-        # Changed second instance of ${choice} from ${choice,,} to solve bug
-        # #2, awaiting confirmation of solution
-        if [ ! -z "${choice}" ] && [ "${choice}" == "n" ]; then
-            # Notify that changes were aborted
-            if [ $TODOTXT_SETDUE_SAFECHECK == "1" ] || [ $TODOTXT_SETDUE_VERBOSE == "1" ]; then
-                echo "$self: Changes aborted."
-            fi
-            # Skip modifying the file
-        # Otherwise, assume changes are to be applied, and apply them
-        else
-            # Replace original line with contents from tmpfile
-            # sed -in "${ln}s/$origstr/$repstr/g" $srcfile
-
-            # WARNING: the following two lines do virtually an in-place
-            # editting of the file. It is done without the -i flag of sed
-            # because it is not equivalently interpreted by BSD sed, which may
-            # be present in some computers
-            sed "${ii}c\\$repstr" $srcfile > "$srcfile.setdue"
-            mv "$srcfile.setdue" $srcfile
-
-            # Notify that changes were applied
-            if [ $TODOTXT_SETDUE_SAFECHECK == "1" ] || [ $TODOTXT_SETDUE_VERBOSE == "1" ]; then
-                echo "$self: Changes applied."
-            fi
-        fi
-    done
+    replace_ddate "$@"
 
     # save changes
     ;;
