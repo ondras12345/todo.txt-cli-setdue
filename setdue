@@ -181,7 +181,7 @@ function get_first_monday {
     monday=$(add_days 2019-01-01 $((0-$weekday1)) )
     # if weekday1 > 4, first week is next week
     monday=$(add_days 2019-01-01 $((7-$weekday1)) )
-    # 
+    #
     # get first weekday
 }
 
@@ -189,7 +189,7 @@ function get_first_monday {
 
 # Main block {{{1
 usagestr="usage: $TODO_SH $self DUEDATE ITEM#+
-parameter conditions: 
+parameter conditions:
  * DUEDATE must be in a supported date format
  * ITEM# must be an integer"
  # TODO: add a list of the valid formats
@@ -214,7 +214,7 @@ case $2 in
     # ## literal dates (aliases for diferential dates)
     if [[ $inputdate = "nw" ]]; then
         inputdate="+7"
-    elif [[ $inputdate = "today" ]]; then 
+    elif [[ $inputdate = "today" ]]; then
         inputdate="+0"
     else
         lower=$(echo $inputdate | tr '[:upper:]' '[:lower:]')
@@ -433,11 +433,10 @@ case $2 in
             if [ $TODOTXT_SETDUE_SAFECHECK == "1" ] || [ $TODOTXT_SETDUE_VERBOSE == "1" ]; then
                 echo "$self: Changes applied."
             fi
-        fi 
+        fi
     done
 
     # save changes
     ;;
 esac
 # EOB Mainblock 1}}}
-
